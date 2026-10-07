@@ -1,0 +1,57 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Create Android and iOS folders (first run only)
+        run: |
+          if [ ! -d android ]; then
+            flutter create --org com.stmedia --project-name pocketwell --platforms android,ios .
+            # flutter create must never replace our own files
+            git checkout -- lib pubspec.yaml analysis_options.yaml test 2>/dev/null || true
+          fi
+
+      - name: Patch Android config (permissions, app name, desugaring)
+        run: python3 tool/patch_android.py
+
+      - name: Get packages
+        run: flutter pub get
+
+      - name: Generate launcher icons
+        run: dart run flutter_launcher_icons
+
+      - name: Run tests
+        run: flutter test
+        continue-on-error: true
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: pocketwell-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
