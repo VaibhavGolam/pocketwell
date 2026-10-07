@@ -97,6 +97,42 @@ int daysBetween(DateTime a, DateTime b) {
   return to.difference(from).inDays;
 }
 
+const List<String> kWeekdayNames = [
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+  'Sunday',
+];
+
+/// 1 -> "1st", 2 -> "2nd", 11 -> "11th", 23 -> "23rd".
+String ordinal(int n) {
+  if (n % 100 >= 11 && n % 100 <= 13) return '${n}th';
+  switch (n % 10) {
+    case 1:
+      return '${n}st';
+    case 2:
+      return '${n}nd';
+    case 3:
+      return '${n}rd';
+    default:
+      return '${n}th';
+  }
+}
+
+/// 2026-10-07, the same on every phone. Used in file names and CSV exports.
+String isoDate(DateTime d) =>
+    '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+/// 250050 -> "2500.50". Always two decimals, no grouping, for spreadsheets.
+String amountText(int minor) {
+  final abs = minor.abs();
+  final sign = minor < 0 ? '-' : '';
+  return '$sign${abs ~/ 100}.${(abs % 100).toString().padLeft(2, '0')}';
+}
+
 String formatDay(DateTime d) => '${d.day} ${kMonthShort[d.month - 1]}';
 
 String formatDayYear(DateTime d) =>
@@ -106,5 +142,14 @@ String friendlyDay(DateTime d, DateTime now) {
   final diff = daysBetween(d, now);
   if (diff == 0) return 'Today';
   if (diff == 1) return 'Yesterday';
+  return d.year == now.year ? formatDay(d) : formatDayYear(d);
+}
+
+/// Like [friendlyDay] but also knows about tomorrow, for dates ahead of us.
+String friendlyDate(DateTime d, DateTime now) {
+  final diff = daysBetween(now, d);
+  if (diff == 0) return 'Today';
+  if (diff == 1) return 'Tomorrow';
+  if (diff == -1) return 'Yesterday';
   return d.year == now.year ? formatDay(d) : formatDayYear(d);
 }

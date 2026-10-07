@@ -37,8 +37,9 @@ class AppDb {
     final dir = await getDatabasesPath();
     final db = await openDatabase(
       '$dir/pocketwell.db',
-      version: 1,
+      version: 2,
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
     _db = db;
     return db;
@@ -61,7 +62,8 @@ class AppDb {
         amount_minor INTEGER NOT NULL,
         category_id INTEGER,
         note TEXT,
-        date INTEGER NOT NULL
+        date INTEGER NOT NULL,
+        recurring_id INTEGER
       )
     ''');
     await db.execute('CREATE INDEX idx_txns_date ON txns(date)');
@@ -96,7 +98,43 @@ class AppDb {
         created INTEGER NOT NULL
       )
     ''');
+    await _createBudgetAndRecurring(db);
     await seedCategories(db);
+  }
+
+  /// Version 2 added budgets, repeating entries and a link from an entry back
+  /// to the repeating entry that created it. Existing data is kept.
+  static Future<void> _onUpgrade(
+    Database db,
+    int oldVersion,
+    int newVersion,
+  ) async {
+    if (oldVersion < 2) {
+      await db.execute('ALTER TABLE txns ADD COLUMN recurring_id INTEGER');
+      await _createBudgetAndRecurring(db);
+    }
+  }
+
+  static Future<void> _createBudgetAndRecurring(Database db) async {
+    await db.execute('''
+      CREATE TABLE budgets(
+        category_id INTEGER PRIMARY KEY,
+        limit_minor INTEGER NOT NULL
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE recurring(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        is_income INTEGER NOT NULL,
+        amount_minor INTEGER NOT NULL,
+        category_id INTEGER,
+        note TEXT,
+        frequency TEXT NOT NULL,
+        anchor INTEGER NOT NULL,
+        next_due INTEGER NOT NULL,
+        active INTEGER NOT NULL DEFAULT 1
+      )
+    ''');
   }
 
   static Future<void> seedCategories(DatabaseExecutor db) async {

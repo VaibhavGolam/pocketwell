@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pocketwell/data/models.dart';
 import 'package:pocketwell/util/format.dart';
 
 void main() {
@@ -60,6 +61,65 @@ void main() {
       expect(friendlyDay(DateTime(2026, 10, 6, 22), now), 'Yesterday');
       expect(friendlyDay(DateTime(2026, 9, 1), now), '1 Sep');
       expect(friendlyDay(DateTime(2025, 9, 1), now), '1 Sep 2025');
+    });
+  });
+
+  group('more format helpers', () {
+    test('ordinal', () {
+      expect(ordinal(1), '1st');
+      expect(ordinal(2), '2nd');
+      expect(ordinal(3), '3rd');
+      expect(ordinal(4), '4th');
+      expect(ordinal(11), '11th');
+      expect(ordinal(12), '12th');
+      expect(ordinal(13), '13th');
+      expect(ordinal(21), '21st');
+      expect(ordinal(22), '22nd');
+      expect(ordinal(23), '23rd');
+      expect(ordinal(101), '101st');
+      expect(ordinal(111), '111th');
+    });
+
+    test('isoDate pads', () {
+      expect(isoDate(DateTime(2026, 1, 5)), '2026-01-05');
+      expect(isoDate(DateTime(2026, 12, 31)), '2026-12-31');
+    });
+
+    test('amountText always has two decimals', () {
+      expect(amountText(250050), '2500.50');
+      expect(amountText(5), '0.05');
+      expect(amountText(0), '0.00');
+      expect(amountText(-150), '-1.50');
+    });
+
+    test('friendlyDate knows tomorrow', () {
+      final now = DateTime(2026, 10, 7, 15);
+      expect(friendlyDate(DateTime(2026, 10, 7), now), 'Today');
+      expect(friendlyDate(DateTime(2026, 10, 8), now), 'Tomorrow');
+      expect(friendlyDate(DateTime(2026, 10, 6), now), 'Yesterday');
+      expect(friendlyDate(DateTime(2026, 10, 20), now), '20 Oct');
+      expect(friendlyDate(DateTime(2027, 1, 5), now), '5 Jan 2027');
+    });
+  });
+
+  group('budgetLevel', () {
+    test('ok below 80 percent', () {
+      expect(budgetLevel(0, 10000), BudgetLevel.ok);
+      expect(budgetLevel(7999, 10000), BudgetLevel.ok);
+    });
+
+    test('close from 80 percent', () {
+      expect(budgetLevel(8000, 10000), BudgetLevel.close);
+      expect(budgetLevel(9999, 10000), BudgetLevel.close);
+    });
+
+    test('over at the limit', () {
+      expect(budgetLevel(10000, 10000), BudgetLevel.over);
+      expect(budgetLevel(25000, 10000), BudgetLevel.over);
+    });
+
+    test('a zero limit never warns', () {
+      expect(budgetLevel(100, 0), BudgetLevel.ok);
     });
   });
 }

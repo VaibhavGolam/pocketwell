@@ -13,6 +13,7 @@ class AppColors {
     required this.onAccent,
     required this.moneyIn,
     required this.moneyOut,
+    required this.warn,
     required this.shadow,
   });
 
@@ -25,6 +26,9 @@ class AppColors {
   final Color onAccent;
   final Color moneyIn;
   final Color moneyOut;
+
+  /// Amber, for a budget that is close to its limit.
+  final Color warn;
   final List<BoxShadow> shadow;
 
   /// ST Media periwinkle.
@@ -40,6 +44,7 @@ class AppColors {
     onAccent: Color(0xFFFFFFFF),
     moneyIn: Color(0xFF2E9E6B),
     moneyOut: Color(0xFFD14B4B),
+    warn: Color(0xFFD98A1F),
     shadow: [
       BoxShadow(
         color: Color(0x14101828),
@@ -59,6 +64,7 @@ class AppColors {
     onAccent: Color(0xFF0F1115),
     moneyIn: Color(0xFF5CC595),
     moneyOut: Color(0xFFEF7B77),
+    warn: Color(0xFFF2B84B),
     shadow: <BoxShadow>[],
   );
 

@@ -1,7 +1,7 @@
 name: pocketwell
-description: Pocketwell, a simple expense tracker with udhaar, savings goals and a daily money tip.
+description: Pocketwell, a simple expense tracker with budgets, repeating entries, udhaar, savings goals and a daily money tip.
 publish_to: "none"
-version: 1.0.0+1
+version: 1.1.0+2
 
 environment:
   sdk: ^3.6.0
@@ -16,6 +16,13 @@ dependencies:
   # Pinned on purpose. Newer major versions changed the scheduling API.
   flutter_local_notifications: 17.2.4
   timezone: ^0.9.4
+  # Backup and restore, CSV export.
+  share_plus: ^10.1.4
+  file_picker: ^8.1.6
+  path_provider: ^2.1.5
+  # App lock.
+  local_auth: ^2.3.0
+  crypto: ^3.0.6
 
 dev_dependencies:
   flutter_test:

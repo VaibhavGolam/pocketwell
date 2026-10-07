@@ -9,25 +9,24 @@ import '../util/recurrence.dart';
 import '../widgets/common.dart';
 import '../widgets/dialogs.dart';
 
-/// Add or edit an expense or income.
-/// Built to be quick: the amount field is focused on open, so the usual flow
-/// is type the amount, tap a category, tap Save.
-class AddEntryScreen extends StatefulWidget {
-  const AddEntryScreen({super.key, this.edit});
+/// Create or edit a repeating entry.
+class RecurringEditScreen extends StatefulWidget {
+  const RecurringEditScreen({super.key, this.edit});
 
-  final Txn? edit;
+  final Recurring? edit;
 
   @override
-  State<AddEntryScreen> createState() => _AddEntryScreenState();
+  State<RecurringEditScreen> createState() => _RecurringEditScreenState();
 }
 
-class _AddEntryScreenState extends State<AddEntryScreen> {
+class _RecurringEditScreenState extends State<RecurringEditScreen> {
   late bool _isIncome;
   late final TextEditingController _amount;
   late final TextEditingController _note;
   int? _categoryId;
+  late Frequency _frequency;
   late DateTime _date;
-  Frequency? _repeat;
+  late bool _active;
 
   @override
   void initState() {
@@ -39,7 +38,9 @@ class _AddEntryScreenState extends State<AddEntryScreen> {
     );
     _note = TextEditingController(text: e?.note ?? '');
     _categoryId = e?.categoryId;
-    _date = e?.date ?? DateTime.now();
+    _frequency = e?.frequency ?? Frequency.monthly;
+    _date = e?.nextDue ?? dateOnly(DateTime.now());
+    _active = e?.active ?? true;
   }
 
   @override
@@ -49,34 +50,23 @@ class _AddEntryScreenState extends State<AddEntryScreen> {
     super.dispose();
   }
 
+  DateTime get _today => dateOnly(DateTime.now());
+
   Future<void> _pickDate() async {
+    final today = _today;
     final picked = await showDatePicker(
       context: context,
-      initialDate: _date.isAfter(DateTime.now()) ? DateTime.now() : _date,
-      firstDate: DateTime(2000),
-      lastDate: DateTime.now(),
+      initialDate: _date.isBefore(today) ? today : _date,
+      firstDate: today,
+      lastDate: DateTime(today.year + 5, today.month, today.day),
     );
     if (picked == null) return;
-    setState(() {
-      _date = DateTime(
-        picked.year,
-        picked.month,
-        picked.day,
-        _date.hour,
-        _date.minute,
-      );
-    });
+    setState(() => _date = dateOnly(picked));
   }
 
   Future<void> _newCategory() async {
     final id = await showCategoryDialog(context, isIncome: _isIncome);
     if (id != null && mounted) setState(() => _categoryId = id);
-  }
-
-  BudgetLevel? _budgetLevel() {
-    final cat = _categoryId;
-    if (_isIncome || cat == null) return null;
-    return store.budgetLevelFor(_date, cat);
   }
 
   Future<void> _save() async {
@@ -87,65 +77,36 @@ class _AddEntryScreenState extends State<AddEntryScreen> {
     }
     final note = _note.text.trim();
     final e = widget.edit;
-    final cat = _categoryId;
-    final before = _budgetLevel();
+    final date = _date.isBefore(_today) ? _today : _date;
 
     if (e == null) {
-      int? ruleId;
-      final repeat = _repeat;
-      if (repeat != null) {
-        final anchor = dateOnly(_date);
-        ruleId = await store.addRecurring(
-          isIncome: _isIncome,
-          amountMinor: minor,
-          categoryId: cat,
-          note: note,
-          frequency: repeat,
-          anchor: anchor,
-          nextDue: firstOccurrenceAfter(anchor, repeat, DateTime.now()),
-        );
-      }
-      await store.addTxn(
+      await store.addRecurring(
         isIncome: _isIncome,
         amountMinor: minor,
-        categoryId: cat,
+        categoryId: _categoryId,
         note: note,
-        date: _date,
-        recurringId: ruleId,
+        frequency: _frequency,
+        anchor: date,
+        nextDue: date,
       );
     } else {
-      await store.updateTxn(
+      // A new first date or a new frequency starts the schedule again.
+      final changed = _frequency != e.frequency || !sameDay(date, e.nextDue);
+      await store.updateRecurring(
         e.id,
         isIncome: _isIncome,
         amountMinor: minor,
-        categoryId: cat,
+        categoryId: _categoryId,
         note: note,
-        date: _date,
+        frequency: _frequency,
+        anchor: changed ? date : e.anchor,
+        nextDue: changed ? date : e.nextDue,
+        active: _active,
       );
     }
-
-    // Warn when this entry pushed a budget past 80% or past its limit.
-    String? warning;
-    if (!_isIncome && cat != null) {
-      final after = store.budgetLevelFor(_date, cat);
-      if (after != null && after.index > (before?.index ?? 0)) {
-        warning = store.budgetNote(_date, cat);
-      }
-    }
-
+    await store.processRecurring();
     if (!mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
     Navigator.of(context).pop();
-    if (warning != null) {
-      messenger
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(warning),
-            duration: const Duration(seconds: 5),
-          ),
-        );
-    }
   }
 
   Future<void> _delete() async {
@@ -153,82 +114,45 @@ class _AddEntryScreenState extends State<AddEntryScreen> {
     if (e == null) return;
     final ok = await confirmDialog(
       context,
-      title: 'Delete this entry?',
-      message: 'This cannot be undone.',
+      title: 'Stop this repeating entry?',
+      message: 'Entries it already added are kept. No new ones will be added.',
+      confirmLabel: 'Stop',
     );
     if (!ok) return;
-    await store.deleteTxn(e.id);
+    await store.deleteRecurring(e.id);
     if (!mounted) return;
     Navigator.of(context).pop();
-  }
-
-  Widget _repeatSection(AppColors c) {
-    final repeat = _repeat;
-    String? hint;
-    if (repeat != null) {
-      final anchor = dateOnly(_date);
-      final next = firstOccurrenceAfter(anchor, repeat, DateTime.now());
-      hint = '${describeSchedule(repeat, anchor)}. '
-          'Next one is added ${friendlyDate(next, DateTime.now())}. '
-          'You can change it later in Settings.';
-    }
-    final options = <(String, Frequency?)>[
-      ('Never', null),
-      ('Weekly', Frequency.weekly),
-      ('Monthly', Frequency.monthly),
-      ('Yearly', Frequency.yearly),
-    ];
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Repeat',
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: c.subtext,
-          ),
-        ),
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            for (final o in options)
-              ChoiceChip(
-                label: Text(o.$1),
-                selected: _repeat == o.$2,
-                onSelected: (_) => setState(() => _repeat = o.$2),
-              ),
-          ],
-        ),
-        if (hint != null) ...[
-          const SizedBox(height: 8),
-          Text(
-            hint,
-            style: TextStyle(fontSize: 13, height: 1.4, color: c.subtext),
-          ),
-        ],
-      ],
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     final c = AppColors.of(context);
     final editing = widget.edit != null;
+    final now = DateTime.now();
 
     return ListenableBuilder(
       listenable: store,
       builder: (context, _) {
         final cats =
             store.categories.where((x) => x.isIncome == _isIncome).toList();
+        final date = _date.isBefore(_today) ? _today : _date;
+        // Describe the schedule that will really be saved: untouched edits keep
+        // their original anchor (a rule set for the 31st stays on the 31st).
+        final e = widget.edit;
+        final unchanged =
+            e != null && _frequency == e.frequency && sameDay(date, e.nextDue);
+        final shownAnchor = (e != null && unchanged) ? e.anchor : date;
+        final first = sameDay(date, _today)
+            ? 'The first entry is added today.'
+            : 'The first entry is added on ${friendlyDate(date, now)}.';
+
         return Scaffold(
           appBar: AppBar(
-            title: Text(editing ? 'Edit entry' : 'Add entry'),
+            title: Text(editing ? 'Edit repeating entry' : 'New repeating entry'),
             actions: [
               if (editing)
                 IconButton(
+                  tooltip: 'Stop repeating',
                   icon: const Icon(Icons.delete_outline_rounded),
                   onPressed: _delete,
                 ),
@@ -297,14 +221,7 @@ class _AddEntryScreenState extends State<AddEntryScreen> {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        Text(
-                          'Category',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: c.subtext,
-                          ),
-                        ),
+                        _label(c, 'Category'),
                         const SizedBox(height: 10),
                         Wrap(
                           spacing: 8,
@@ -332,8 +249,27 @@ class _AddEntryScreenState extends State<AddEntryScreen> {
                           textCapitalization: TextCapitalization.sentences,
                           decoration: pwInput(
                             context,
-                            hint: 'Add a note (optional)',
+                            hint: 'Note, like "House rent" (optional)',
                             prefixIcon: const Icon(Icons.notes_rounded),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        _label(c, 'Repeats'),
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          width: double.infinity,
+                          child: SegmentedButton<Frequency>(
+                            segments: [
+                              for (final f in Frequency.values)
+                                ButtonSegment<Frequency>(
+                                  value: f,
+                                  label: Text(frequencyLabel(f)),
+                                ),
+                            ],
+                            selected: {_frequency},
+                            showSelectedIcon: false,
+                            onSelectionChanged: (s) =>
+                                setState(() => _frequency = s.first),
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -343,11 +279,32 @@ class _AddEntryScreenState extends State<AddEntryScreen> {
                             Icons.calendar_today_rounded,
                             size: 18,
                           ),
-                          label: Text(friendlyDay(_date, DateTime.now())),
+                          label: Text(
+                            editing
+                                ? 'Next on ${friendlyDate(date, now)}'
+                                : 'Starts ${friendlyDate(date, now)}',
+                          ),
                         ),
-                        if (!editing) ...[
-                          const SizedBox(height: 20),
-                          _repeatSection(c),
+                        const SizedBox(height: 10),
+                        Text(
+                          '${describeSchedule(_frequency, shownAnchor)}. $first',
+                          style: TextStyle(
+                            fontSize: 13,
+                            height: 1.4,
+                            color: c.subtext,
+                          ),
+                        ),
+                        if (editing) ...[
+                          const SizedBox(height: 8),
+                          SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Active'),
+                            subtitle: const Text(
+                              'Turn off to pause without deleting.',
+                            ),
+                            value: _active,
+                            onChanged: (v) => setState(() => _active = v),
+                          ),
                         ],
                       ],
                     ),
@@ -370,4 +327,13 @@ class _AddEntryScreenState extends State<AddEntryScreen> {
       },
     );
   }
+
+  Widget _label(AppColors c, String text) => Text(
+        text,
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: c.subtext,
+        ),
+      );
 }

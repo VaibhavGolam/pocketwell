@@ -303,3 +303,99 @@ class _AmountDialogState extends State<_AmountDialog> {
     );
   }
 }
+
+// -------------------------------------------------------------------- budget
+
+/// Set, change or remove the monthly limit for one expense category.
+Future<void> showBudgetDialog(BuildContext context, Category category) {
+  return showDialog<void>(
+    context: context,
+    builder: (_) => _BudgetDialog(category: category),
+  );
+}
+
+class _BudgetDialog extends StatefulWidget {
+  const _BudgetDialog({required this.category});
+
+  final Category category;
+
+  @override
+  State<_BudgetDialog> createState() => _BudgetDialogState();
+}
+
+class _BudgetDialogState extends State<_BudgetDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    final existing = store.budgetFor(widget.category.id);
+    _controller = TextEditingController(
+      text: existing == null ? '' : plainAmount(existing.limitMinor),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final minor = parseAmountMinor(_controller.text);
+    if (minor == null) {
+      showSnack(context, 'Enter a monthly limit');
+      return;
+    }
+    await store.setBudget(widget.category.id, minor);
+    if (!mounted) return;
+    Navigator.of(context).pop();
+  }
+
+  Future<void> _remove() async {
+    await store.removeBudget(widget.category.id);
+    if (!mounted) return;
+    Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final has = store.budgetFor(widget.category.id) != null;
+    return AlertDialog(
+      title: Text('${widget.category.emoji} ${widget.category.name}'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+            ],
+            decoration: pwInput(
+              context,
+              hint: 'Monthly limit',
+              prefixText: '${store.currencySymbol} ',
+            ),
+            onSubmitted: (_) => _save(),
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'This limit applies every month. You get a warning at 80%.',
+            style: TextStyle(fontSize: 13),
+          ),
+        ],
+      ),
+      actions: [
+        if (has) TextButton(onPressed: _remove, child: const Text('Remove')),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(onPressed: _save, child: const Text('Save')),
+      ],
+    );
+  }
+}

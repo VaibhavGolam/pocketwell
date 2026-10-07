@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../data/store.dart';
 import '../data/tips.dart';
 import '../theme.dart';
+import '../widgets/common.dart';
 import 'goals_screen.dart';
 import 'home_screen.dart';
 import 'people_screen.dart';
@@ -15,13 +16,37 @@ class Shell extends StatefulWidget {
   State<Shell> createState() => _ShellState();
 }
 
-class _ShellState extends State<Shell> {
+class _ShellState extends State<Shell> with WidgetsBindingObserver {
   int _index = 0;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowTip());
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _showRecurringNotice();
+      _maybeShowTip();
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// Repeating entries that came due while the app was closed, or while it
+  /// sat in the background past midnight, are added when the app comes back.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      store.processRecurring().then((_) => _showRecurringNotice());
+    }
+  }
+
+  void _showRecurringNotice() {
+    final message = store.takeRecurringNotice();
+    if (message != null && mounted) showSnack(context, message);
   }
 
   /// Shows the tip of the day once per calendar day, on the first open.

@@ -4,11 +4,14 @@ import '../data/models.dart';
 import '../data/store.dart';
 import '../theme.dart';
 import '../util/format.dart';
+import '../widgets/budget_row.dart';
 import '../widgets/charts.dart';
 import '../widgets/common.dart';
 import '../widgets/entry_tile.dart';
 import 'add_entry_screen.dart';
+import 'budgets_screen.dart';
 import 'category_entries_screen.dart';
+import 'search_screen.dart';
 import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -34,6 +37,18 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _openSearch() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const SearchScreen()),
+    );
+  }
+
+  void _openBudgets() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const BudgetsScreen()),
+    );
+  }
+
   void _openSettings() {
     Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => const SettingsScreen()),
@@ -47,6 +62,11 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: const Text('Pocketwell'),
         actions: [
+          IconButton(
+            tooltip: 'Search',
+            icon: const Icon(Icons.search_rounded),
+            onPressed: _openSearch,
+          ),
           IconButton(
             tooltip: 'Settings',
             icon: const Icon(Icons.settings_outlined),
@@ -77,6 +97,8 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 8),
               _summaryCard(c, totalIn, totalOut),
               _comparison(c, totalOut, prevOut),
+              const SizedBox(height: 12),
+              _budgetCard(c),
               const SizedBox(height: 12),
               if (byCategory.isNotEmpty) ...[
                 _spendingCard(c, byCategory, totalOut),
@@ -205,6 +227,124 @@ class _HomeScreenState extends State<HomeScreen> {
           fontWeight: FontWeight.w600,
           color: color,
         ),
+      ),
+    );
+  }
+
+  /// Budget progress for the month on screen. Without any budgets it is a
+  /// small prompt to set one.
+  Widget _budgetCard(AppColors c) {
+    final items = <(Category, Budget, int)>[];
+    for (final b in store.budgets) {
+      final cat = store.categoryById(b.categoryId);
+      if (cat == null) continue;
+      items.add((cat, b, store.spentIn(_month, b.categoryId)));
+    }
+
+    if (items.isEmpty) {
+      return SurfaceCard(
+        onTap: _openBudgets,
+        child: Row(
+          children: [
+            const Text('🎯', style: TextStyle(fontSize: 28)),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Set a monthly budget',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: c.text,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Pick a limit for food, fuel or anything else. You get a warning at 80%.',
+                    style: TextStyle(fontSize: 13, height: 1.4, color: c.subtext),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: c.subtext),
+          ],
+        ),
+      );
+    }
+
+    items.sort((a, b) {
+      final ra = a.$3 / a.$2.limitMinor;
+      final rb = b.$3 / b.$2.limitMinor;
+      return rb.compareTo(ra);
+    });
+    final over = items
+        .where((i) => budgetLevel(i.$3, i.$2.limitMinor) == BudgetLevel.over)
+        .length;
+    final close = items
+        .where((i) => budgetLevel(i.$3, i.$2.limitMinor) == BudgetLevel.close)
+        .length;
+    final shown = items.take(4).toList();
+
+    String? status;
+    Color statusColor = c.subtext;
+    if (over > 0) {
+      status = over == 1 ? '1 over budget' : '$over over budget';
+      statusColor = c.moneyOut;
+    } else if (close > 0) {
+      status = close == 1 ? '1 close to its limit' : '$close close to their limit';
+      statusColor = c.warn;
+    }
+
+    return SurfaceCard(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Budgets',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: c.text,
+                  ),
+                ),
+              ),
+              if (status != null)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Text(
+                    status,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: statusColor,
+                    ),
+                  ),
+                ),
+              TextButton(onPressed: _openBudgets, child: const Text('Manage')),
+            ],
+          ),
+          for (final i in shown)
+            BudgetRow(
+              category: i.$1,
+              limitMinor: i.$2.limitMinor,
+              spentMinor: i.$3,
+              onTap: _openBudgets,
+            ),
+          if (items.length > shown.length)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
+              child: Text(
+                '+${items.length - shown.length} more',
+                style: TextStyle(fontSize: 13, color: c.subtext),
+              ),
+            ),
+        ],
       ),
     );
   }

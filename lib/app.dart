@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'data/store.dart';
 import 'screens/shell.dart';
 import 'theme.dart';
+import 'widgets/lock_gate.dart';
 
 class PocketwellApp extends StatelessWidget {
   const PocketwellApp({super.key});
@@ -21,6 +22,9 @@ class PocketwellApp extends StatelessWidget {
           theme: lightTheme,
           darkTheme: darkTheme,
           themeMode: mode,
+          // The lock covers the whole app, dialogs and sub screens included.
+          builder: (context, child) =>
+              LockGate(child: child ?? const SizedBox.shrink()),
           home: const Shell(),
         );
       },

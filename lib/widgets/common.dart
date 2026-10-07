@@ -68,6 +68,90 @@ class EmojiBadge extends StatelessWidget {
   }
 }
 
+/// A thin bar that fills from the left. [value] is 0 to 1; anything above 1 is
+/// shown as full.
+class ProgressBar extends StatelessWidget {
+  const ProgressBar({
+    super.key,
+    required this.value,
+    required this.color,
+    this.height = 8,
+  });
+
+  final double value;
+  final Color color;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColors.of(context);
+    final fill = value.isNaN ? 0.0 : value.clamp(0.0, 1.0).toDouble();
+    final radius = BorderRadius.circular(height / 2);
+    return Container(
+      height: height,
+      decoration: BoxDecoration(color: c.border, borderRadius: radius),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: FractionallySizedBox(
+          widthFactor: fill,
+          heightFactor: 1,
+          child: DecoratedBox(
+            decoration: BoxDecoration(color: color, borderRadius: radius),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A rounded emoji and label, used to pick a category.
+class CategoryChip extends StatelessWidget {
+  const CategoryChip({
+    super.key,
+    required this.emoji,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String emoji;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = AppColors.of(context);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? c.accent.withValues(alpha: 0.16) : c.card,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: selected ? c.accent : c.border),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(emoji, style: const TextStyle(fontSize: 18)),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                color: c.text,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class EmptyState extends StatelessWidget {
   const EmptyState({
     super.key,

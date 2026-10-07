@@ -1,3 +1,5 @@
+import '../util/recurrence.dart';
+
 DateTime? _dateFrom(Object? v) =>
     v == null ? null : DateTime.fromMillisecondsSinceEpoch(v as int);
 
@@ -34,6 +36,7 @@ class Txn {
     required this.categoryId,
     required this.note,
     required this.date,
+    this.recurringId,
   });
 
   final int id;
@@ -43,6 +46,9 @@ class Txn {
   final String note;
   final DateTime date;
 
+  /// Set when a repeating entry created this one.
+  final int? recurringId;
+
   factory Txn.fromMap(Map<String, Object?> m) => Txn(
         id: m['id'] as int,
         isIncome: (m['is_income'] as int) == 1,
@@ -50,6 +56,7 @@ class Txn {
         categoryId: m['category_id'] as int?,
         note: (m['note'] as String?) ?? '',
         date: DateTime.fromMillisecondsSinceEpoch(m['date'] as int),
+        recurringId: m['recurring_id'] as int?,
       );
 }
 
@@ -134,5 +141,67 @@ class Goal {
         savedMinor: m['saved_minor'] as int,
         deadline: _dateFrom(m['deadline']),
         created: DateTime.fromMillisecondsSinceEpoch(m['created'] as int),
+      );
+}
+
+/// A monthly spending limit for one expense category. It repeats every month.
+class Budget {
+  const Budget({required this.categoryId, required this.limitMinor});
+
+  final int categoryId;
+  final int limitMinor;
+
+  factory Budget.fromMap(Map<String, Object?> m) => Budget(
+        categoryId: m['category_id'] as int,
+        limitMinor: m['limit_minor'] as int,
+      );
+}
+
+enum BudgetLevel { ok, close, over }
+
+/// "close" starts at 80 percent of the limit, "over" at 100 percent.
+BudgetLevel budgetLevel(int spentMinor, int limitMinor) {
+  if (limitMinor <= 0) return BudgetLevel.ok;
+  if (spentMinor >= limitMinor) return BudgetLevel.over;
+  if (spentMinor * 5 >= limitMinor * 4) return BudgetLevel.close;
+  return BudgetLevel.ok;
+}
+
+/// An entry that repeats (rent, salary, a subscription).
+/// [anchor] is the first date and sets the day of the month or week.
+/// [nextDue] is the next date that has not been added yet.
+class Recurring {
+  const Recurring({
+    required this.id,
+    required this.isIncome,
+    required this.amountMinor,
+    required this.categoryId,
+    required this.note,
+    required this.frequency,
+    required this.anchor,
+    required this.nextDue,
+    required this.active,
+  });
+
+  final int id;
+  final bool isIncome;
+  final int amountMinor;
+  final int? categoryId;
+  final String note;
+  final Frequency frequency;
+  final DateTime anchor;
+  final DateTime nextDue;
+  final bool active;
+
+  factory Recurring.fromMap(Map<String, Object?> m) => Recurring(
+        id: m['id'] as int,
+        isIncome: (m['is_income'] as int) == 1,
+        amountMinor: m['amount_minor'] as int,
+        categoryId: m['category_id'] as int?,
+        note: (m['note'] as String?) ?? '',
+        frequency: frequencyFromName(m['frequency'] as String?),
+        anchor: DateTime.fromMillisecondsSinceEpoch(m['anchor'] as int),
+        nextDue: DateTime.fromMillisecondsSinceEpoch(m['next_due'] as int),
+        active: (m['active'] as int) == 1,
       );
 }
